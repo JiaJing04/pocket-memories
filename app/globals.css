@@ -57,3 +57,5 @@ body{background-color:var(--paper);background-image:radial-gradient(ellipse at 5
 /* A compact stacked wordmark for Pocket Memories. */
 .brand{font-size:27px;letter-spacing:-1px}.brand .brand-wordmark{font:inherit;letter-spacing:inherit;line-height:.95;margin:0}.brand .brand-subtitle{font:7px Arial,Helvetica,sans-serif;letter-spacing:2px;margin:7px 0 0}
 @media(max-width:560px){nav{gap:12px}.brand{font-size:23px}.brand .brand-subtitle{font-size:6px;margin-top:6px}.open-sign{flex-shrink:0}}
+
+.save-help{font-size:12px;line-height:1.6;color:var(--muted);margin-top:16px}.save-help p{margin:8px 0}.save-help a{color:var(--red);text-underline-offset:3px}
