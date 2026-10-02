@@ -13,6 +13,8 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const paperRef = useRef<HTMLCanvasElement>(null);
+  const downloadedUrlRef = useRef<string | null>(null);
   const sessionRef = useRef(0);
   const [stage, setStage] = useState<Stage>("outside");
   const [started, setStarted] = useState(false);
@@ -30,11 +32,44 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [printed, setPrinted] = useState(false);
   const [paperReady, setPaperReady] = useState(false);
-  const [savedStrip, setSavedStrip] = useState<{ url: string; previewUrl: string; filename: string } | null>(null);
+  const [savedStrip, setSavedStrip] = useState<{ url: string; preview: HTMLCanvasElement; filename: string } | null>(null);
   useEffect(() => { setSavedStrip(null); }, [shots, theme, filter, caption, stripDate]);
   useEffect(() => {
     return () => { if (savedStrip) URL.revokeObjectURL(savedStrip.url); };
   }, [savedStrip]);
+  useEffect(() => {
+    if (stage !== "printing" || !savedStrip || !paperRef.current) return;
+    const paper = paperRef.current;
+    paper.width = savedStrip.preview.width;
+    paper.height = savedStrip.preview.height;
+    const context = paper.getContext("2d");
+    if (!context) {
+      setPrinted(true);
+      setError("The preview couldn’t render. You can still download or open your strip below.");
+      return;
+    }
+    // Copy pixels directly instead of asking iOS to load another encoded image.
+    context.drawImage(savedStrip.preview, 0, 0);
+    let animationFrame = requestAnimationFrame(() => {
+      animationFrame = requestAnimationFrame(() => {
+        setPaperReady(true);
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPrinted(true);
+      });
+    });
+    return () => cancelAnimationFrame(animationFrame);
+  }, [stage, savedStrip]);
+  useEffect(() => {
+    if (stage !== "printing" || !printed || !savedStrip || downloadedUrlRef.current === savedStrip.url) return;
+    downloadedUrlRef.current = savedStrip.url;
+    // Wait until the preview is drawn and the printing animation has finished
+    // before opening the browser's native download UI.
+    const link = document.createElement("a");
+    link.download = savedStrip.filename;
+    link.href = savedStrip.url;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }, [stage, printed, savedStrip]);
   useEffect(() => { setStripDate(new Date().toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })); return () => { sessionRef.current++; streamRef.current?.getTracks().forEach(track => track.stop()); }; }, []);
   function stopCamera() { streamRef.current?.getTracks().forEach(track => track.stop()); streamRef.current = null; setStarted(false); }
   async function startCamera() {
@@ -89,27 +124,21 @@ export default function Home() {
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(value => value ? resolve(value) : reject(new Error("Could not create PNG")), "image/png");
       });
-      // The machine only displays a tiny image. Keep its preview independent of
-      // the full-size blob URL used by the browser's download UI on iOS.
+      // Keep a small pixel preview separate from the full-resolution download.
       const previewCanvas = document.createElement("canvas");
       previewCanvas.width = 225;
       previewCanvas.height = Math.round(H * previewCanvas.width / W);
       const previewContext = previewCanvas.getContext("2d");
       if (!previewContext) throw new Error("Could not create preview");
       previewContext.drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
-      const previewUrl = previewCanvas.toDataURL("image/png");
-      if (!previewUrl.startsWith("data:image/png")) throw new Error("Could not create preview PNG");
+      canvas.width = 0; canvas.height = 0;
       const url = URL.createObjectURL(blob);
       const filename = `pocket-memories-photostrip-${Date.now()}.png`;
       // Keep a visible link available if the browser ignores the automatic download.
-      setSavedStrip({ url, previewUrl, filename });
+      setSavedStrip({ url, preview: previewCanvas, filename });
       setPrinted(false);
       setPaperReady(false);
       setStage("printing");
-      const link = document.createElement("a");
-      link.download = filename; link.href = url;
-      document.body.appendChild(link);
-      link.click(); link.remove();
     } catch { setError("Couldn’t save your strip. Please try again."); } finally { setSaving(false); }
   }
   const colors = THEMES[theme];
@@ -129,7 +158,7 @@ export default function Home() {
             <div className="booth-side" aria-hidden={stage === "outside" ? true : undefined}>
               <div className="coin-slot" />
               <div className="print-slot" />
-              {stage === "printing" && savedStrip ? <div className="printing-paper-window"><img className={`printing-paper${paperReady ? " ready" : ""}`} src={savedStrip.previewUrl} width={225} height={646} alt="Your finished photo strip" onLoad={() => { setPaperReady(true); if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPrinted(true); }} onError={() => { setPrinted(true); setError("The preview couldn’t load. You can still download or open your strip below."); }} onAnimationEnd={() => setPrinted(true)} /></div> : <div className="sample-strip">{[0, 1, 2, 3].map(i => <div className={`sample-frame sample-${i}`} key={i}><span>☺</span><span>☺</span></div>)}</div>}
+              {stage === "printing" && savedStrip ? <div className="printing-paper-window"><canvas ref={paperRef} className={`printing-paper${paperReady ? " ready" : ""}`} width={225} height={646} role="img" aria-label="Your finished photo strip" onAnimationEnd={() => setPrinted(true)} /></div> : <div className="sample-strip">{[0, 1, 2, 3].map(i => <div className={`sample-frame sample-${i}`} key={i}><span>☺</span><span>☺</span></div>)}</div>}
             </div>
           </div>
           <div className="booth-base" />
@@ -139,7 +168,7 @@ export default function Home() {
       {stage === "printing" && savedStrip && <div className="printing-message">
         {error && <p className="error" role="alert">{error}</p>}
         <p role="status" aria-live="polite">{printed ? "Your memories are ready." : "Printing your little memories…"}</p>
-        <div className="save-help"><p>Your download is starting. <a href={savedStrip.url} download={savedStrip.filename}>Download again</a></p><p><a href={savedStrip.url} target="_blank" rel="noopener noreferrer">Open your photo strip</a></p></div>
+        <div className="save-help">{printed ? <><p>Your download is starting. <a href={savedStrip.url} download={savedStrip.filename}>Download again</a></p><p><a href={savedStrip.url} target="_blank" rel="noopener noreferrer">Open your photo strip</a></p></> : <p>Your download will start when printing finishes.</p>}</div>
         <button className="text-button" onClick={retake}><RotateCcw size={15} /> Let’s take another</button>
         <button className="text-button" onClick={leave}><ArrowLeft size={15} /> Back to booth</button>
       </div>}
