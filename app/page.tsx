@@ -30,7 +30,7 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [printed, setPrinted] = useState(false);
   const [paperReady, setPaperReady] = useState(false);
-  const [savedStrip, setSavedStrip] = useState<{ url: string; filename: string } | null>(null);
+  const [savedStrip, setSavedStrip] = useState<{ url: string; previewUrl: string; filename: string } | null>(null);
   useEffect(() => { setSavedStrip(null); }, [shots, theme, filter, caption, stripDate]);
   useEffect(() => {
     return () => { if (savedStrip) URL.revokeObjectURL(savedStrip.url); };
@@ -89,10 +89,20 @@ export default function Home() {
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(value => value ? resolve(value) : reject(new Error("Could not create PNG")), "image/png");
       });
+      // The machine only displays a tiny image. Keep its preview independent of
+      // the full-size blob URL used by the browser's download UI on iOS.
+      const previewCanvas = document.createElement("canvas");
+      previewCanvas.width = 225;
+      previewCanvas.height = Math.round(H * previewCanvas.width / W);
+      const previewContext = previewCanvas.getContext("2d");
+      if (!previewContext) throw new Error("Could not create preview");
+      previewContext.drawImage(canvas, 0, 0, previewCanvas.width, previewCanvas.height);
+      const previewUrl = previewCanvas.toDataURL("image/png");
+      if (!previewUrl.startsWith("data:image/png")) throw new Error("Could not create preview PNG");
       const url = URL.createObjectURL(blob);
       const filename = `pocket-memories-photostrip-${Date.now()}.png`;
       // Keep a visible link available if the browser ignores the automatic download.
-      setSavedStrip({ url, filename });
+      setSavedStrip({ url, previewUrl, filename });
       setPrinted(false);
       setPaperReady(false);
       setStage("printing");
@@ -119,7 +129,7 @@ export default function Home() {
             <div className="booth-side" aria-hidden={stage === "outside" ? true : undefined}>
               <div className="coin-slot" />
               <div className="print-slot" />
-              {stage === "printing" && savedStrip ? <div className="printing-paper-window"><img className={`printing-paper${paperReady ? " ready" : ""}`} src={savedStrip.url} width={900} height={2584} alt="Your finished photo strip" onLoad={() => { setPaperReady(true); if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPrinted(true); }} onError={() => { setPrinted(true); setError("The preview couldn’t load. You can still download or open your strip below."); }} onAnimationEnd={() => setPrinted(true)} /></div> : <div className="sample-strip">{[0, 1, 2, 3].map(i => <div className={`sample-frame sample-${i}`} key={i}><span>☺</span><span>☺</span></div>)}</div>}
+              {stage === "printing" && savedStrip ? <div className="printing-paper-window"><img className={`printing-paper${paperReady ? " ready" : ""}`} src={savedStrip.previewUrl} width={225} height={646} alt="Your finished photo strip" onLoad={() => { setPaperReady(true); if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPrinted(true); }} onError={() => { setPrinted(true); setError("The preview couldn’t load. You can still download or open your strip below."); }} onAnimationEnd={() => setPrinted(true)} /></div> : <div className="sample-strip">{[0, 1, 2, 3].map(i => <div className={`sample-frame sample-${i}`} key={i}><span>☺</span><span>☺</span></div>)}</div>}
             </div>
           </div>
           <div className="booth-base" />
