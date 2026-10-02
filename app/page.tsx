@@ -29,6 +29,7 @@ export default function Home() {
   const [stripDate, setStripDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [printed, setPrinted] = useState(false);
+  const [paperReady, setPaperReady] = useState(false);
   const [savedStrip, setSavedStrip] = useState<{ url: string; filename: string } | null>(null);
   useEffect(() => { setSavedStrip(null); }, [shots, theme, filter, caption, stripDate]);
   useEffect(() => {
@@ -93,6 +94,7 @@ export default function Home() {
       // Keep a visible link available if the browser ignores the automatic download.
       setSavedStrip({ url, filename });
       setPrinted(false);
+      setPaperReady(false);
       setStage("printing");
       const link = document.createElement("a");
       link.download = filename; link.href = url;
@@ -117,7 +119,7 @@ export default function Home() {
             <div className="booth-side" aria-hidden={stage === "outside" ? true : undefined}>
               <div className="coin-slot" />
               <div className="print-slot" />
-              {stage === "printing" && savedStrip ? <div className="printing-paper-window"><img className="printing-paper" src={savedStrip.url} alt="Your finished photo strip" onAnimationEnd={() => setPrinted(true)} /></div> : <div className="sample-strip">{[0, 1, 2, 3].map(i => <div className={`sample-frame sample-${i}`} key={i}><span>☺</span><span>☺</span></div>)}</div>}
+              {stage === "printing" && savedStrip ? <div className="printing-paper-window"><img className={`printing-paper${paperReady ? " ready" : ""}`} src={savedStrip.url} width={900} height={2584} alt="Your finished photo strip" onLoad={() => { setPaperReady(true); if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPrinted(true); }} onError={() => { setPrinted(true); setError("The preview couldn’t load. You can still download or open your strip below."); }} onAnimationEnd={() => setPrinted(true)} /></div> : <div className="sample-strip">{[0, 1, 2, 3].map(i => <div className={`sample-frame sample-${i}`} key={i}><span>☺</span><span>☺</span></div>)}</div>}
             </div>
           </div>
           <div className="booth-base" />
@@ -125,6 +127,7 @@ export default function Home() {
         <div className="floor-shadow" aria-hidden="true" />
       </div>
       {stage === "printing" && savedStrip && <div className="printing-message">
+        {error && <p className="error" role="alert">{error}</p>}
         <p role="status" aria-live="polite">{printed ? "Your memories are ready." : "Printing your little memories…"}</p>
         <div className="save-help"><p>Your download is starting. <a href={savedStrip.url} download={savedStrip.filename}>Download again</a></p><p><a href={savedStrip.url} target="_blank" rel="noopener noreferrer">Open your photo strip</a></p></div>
         <button className="text-button" onClick={retake}><RotateCcw size={15} /> Let’s take another</button>

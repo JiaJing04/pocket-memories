@@ -102,10 +102,11 @@ body{background-color:var(--paper);background-image:url("data:image/svg+xml,%3Cs
 /* The finished strip feeds out through the cabinet's existing print slot. */
 .printing-screen{gap:24px}
 .printing-screen .print-slot{position:relative;z-index:3}
-.printing-paper-window{width:66px;overflow:hidden;margin-top:-4px;padding:0 5px 8px}
-.printing-paper{display:block;width:100%;height:auto;box-shadow:2px 4px 5px #0004;animation:print-strip 6s linear both}
+.printing-paper-window{width:66px;flex-shrink:0;overflow:hidden;margin-top:-4px;padding:0 5px 8px}
+.printing-paper{display:block;width:100%;height:auto;box-shadow:2px 4px 5px #0004;transform:translateY(-102%)}
+.printing-paper.ready{animation:print-strip 6s linear both}
 @keyframes print-strip{from{transform:translateY(-102%)}to{transform:translateY(0)}}
 .printing-message{text-align:center;max-width:360px}
 .printing-message>p{margin:0;font:italic 20px Georgia,serif}
 .printing-message .text-button{margin:8px 12px 0}
-@media(prefers-reduced-motion:reduce){.printing-paper{animation:print-strip .01s linear both!important}}
+@media(prefers-reduced-motion:reduce){.printing-paper.ready{animation:none!important;transform:translateY(0)}}
